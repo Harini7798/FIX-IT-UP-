@@ -47,6 +47,12 @@ interface Conversation {
   messages: Message[];
 }
 
+type ConversationRaw = {
+  id: string;
+  item: { user_id: string; title?: string; category?: string };
+  messages: Message[];
+};
+
 const Messages = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -56,9 +62,8 @@ const Messages = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // Get the request ID from URL params if present
-  const urlParams = new URLSearchParams(window.location.search);
-  const requestIdFromUrl = urlParams.get('request');
+  // Request ID from URL (set on client only to avoid SSR/window errors)
+  const [requestIdFromUrl, setRequestIdFromUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -211,6 +216,19 @@ const Messages = () => {
       }
     }
   }, [requestIdFromUrl, conversations]);
+
+  // Read URL params on client only to avoid SSR/window issues
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const req = params.get('request');
+        if (req) setRequestIdFromUrl(req);
+      }
+    } catch (err) {
+      // ignore - defensive for environments without window
+    }
+  }, []);
 
   const fetchConversations = async () => {
     try {
