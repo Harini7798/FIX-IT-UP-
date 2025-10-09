@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin, Clock, DollarSign, Search } from 'lucide-react';
+import { MapPin, Clock, Search } from 'lucide-react';
+import formatINR from '@/lib/formatCurrency';
 import { Link } from 'react-router-dom';
 
 interface Item {
@@ -58,7 +59,7 @@ export default function Browse() {
 
   const fetchItems = async () => {
     try {
-      let query = supabase
+  const query = supabase
         .from('items')
         .select(`
           *,
@@ -160,15 +161,15 @@ export default function Browse() {
               </SelectContent>
             </Select>
 
-            <Select value={priceRange} onValueChange={(v: any) => setPriceRange(v)}>
+            <Select value={priceRange} onValueChange={(v: 'all' | 'low' | 'medium' | 'high') => setPriceRange(v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Price Range" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Prices</SelectItem>
-                <SelectItem value="low">Under $50</SelectItem>
-                <SelectItem value="medium">$50 - $150</SelectItem>
-                <SelectItem value="high">Over $150</SelectItem>
+                <SelectItem value="low">Under ₹50</SelectItem>
+                <SelectItem value="medium">₹50 - ₹150</SelectItem>
+                <SelectItem value="high">Over ₹150</SelectItem>
               </SelectContent>
             </Select>
 
@@ -247,13 +248,13 @@ function ItemCard({ item }: { item: Item }) {
           <div className="flex items-center gap-4 text-sm">
             {item.estimated_price && (
               <div className="flex items-center gap-1">
-                <DollarSign className="h-3 w-3" />
-                <span>Est. ${item.estimated_price}</span>
+                <span className="text-sm">₹</span>
+                <span>Est. {formatINR(item.estimated_price)}</span>
               </div>
             )}
             {item.max_price && (
               <div className="flex items-center gap-1">
-                <span>Max: ${item.max_price}</span>
+                <span>Max: {formatINR(item.max_price)}</span>
               </div>
             )}
           </div>

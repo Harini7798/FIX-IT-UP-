@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Wrench, Star, DollarSign, Clock } from 'lucide-react';
+import { Wrench, Star, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const skillSuggestions = [
@@ -73,10 +73,11 @@ export default function BecomeFixer() {
       });
 
       navigate('/dashboard');
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error updating profile",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -127,7 +128,7 @@ export default function BecomeFixer() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="text-center">
             <CardContent className="pt-6">
-              <DollarSign className="w-8 h-8 text-green-500 mx-auto mb-2" />
+              <div className="w-8 h-8 text-green-500 mx-auto mb-2 text-2xl">₹</div>
               <h3 className="font-semibold mb-1">Earn Money</h3>
               <p className="text-sm text-muted-foreground">Set your own prices and work on your schedule</p>
             </CardContent>

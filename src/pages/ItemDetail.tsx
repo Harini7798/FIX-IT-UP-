@@ -14,7 +14,7 @@ import { ReviewForm } from '@/components/ReviewForm';
 import { 
   MapPin, 
   Clock, 
-  DollarSign, 
+  
   User, 
   Send,
   Calendar,
@@ -23,6 +23,7 @@ import {
   Star,
   CheckCircle
 } from 'lucide-react';
+import formatINR from '@/lib/formatCurrency';
 
 interface ItemDetail {
   id: string;
@@ -94,20 +95,88 @@ export default function ItemDetail() {
   });
 
   useEffect(() => {
-    if (id) {
-      fetchItemDetail();
-      if (user) {
-        fetchRepairRequests();
-        fetchUserProfile();
+    if (!id) return;
+
+    const load = async () => {
+      try {
+        // Fetch item details
+        const { data, error } = await supabase
+          .from('items')
+          .select(`
+            *,
+            profiles (
+              display_name,
+              user_id
+            )
+          `)
+          .eq('id', id)
+          .single();
+
+        if (error) throw error;
+        setItem(data);
+
+        if (user) {
+          // Fetch repair requests for this item
+          const { data: rrData, error: rrError } = await supabase
+            .from('repair_requests')
+            .select(`
+              *,
+              profiles (
+                display_name,
+                rating
+              )
+            `)
+            .eq('item_id', id)
+            .order('created_at', { ascending: false });
+
+          if (!rrError) setRepairRequests(rrData || []);
+
+          // Fetch user roles for current user
+          const { data: rolesData, error: rolesError } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id);
+
+          if (!rolesError) setUserRoles(rolesData?.map((r: { role: string }) => r.role) || []);
+        }
+      } catch (err) {
+        console.error('Error fetching item:', err);
+        navigate('/browse');
+      } finally {
+        setLoading(false);
       }
-    }
-  }, [id, user]);
+    };
+
+    load();
+  }, [id, user, navigate]);
 
   useEffect(() => {
-    if (repairRequests.length > 0) {
-      fetchReviews();
-    }
-  }, [repairRequests]);
+    if (!id || repairRequests.length === 0) return;
+
+    const loadReviews = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('reviews')
+          .select(`
+            *,
+            profiles!reviewer_id (
+              display_name
+            )
+          `)
+          .in('repair_request_id',
+            repairRequests.map(r => r.id)
+          )
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setReviews(data || []);
+      } catch (err) {
+        console.error('Error fetching reviews:', err);
+      }
+    };
+
+    loadReviews();
+  }, [id, repairRequests]);
 
   const fetchUserProfile = async () => {
     if (!user) return;
@@ -196,10 +265,11 @@ export default function ItemDetail() {
       setShowProposalForm(false);
       setProposalData({ proposed_price: '', estimated_completion: '', message: '' });
       fetchRepairRequests();
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error submitting proposal",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -224,10 +294,11 @@ export default function ItemDetail() {
       });
 
       fetchRepairRequests();
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error accepting proposal",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     }
@@ -264,10 +335,11 @@ export default function ItemDetail() {
       if (newStatus === 'completed') {
         setShowReviewForm(requestId);
       }
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error updating status",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     }
@@ -400,14 +472,14 @@ export default function ItemDetail() {
 
                 <div className="flex items-center gap-6">
                   {item.estimated_price && (
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5 text-muted-foreground" />
-                      <span>Estimated: ${item.estimated_price}</span>
-                    </div>
-                  )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">₹</span>
+                        <span>Estimated: {formatINR(item.estimated_price)}</span>
+                      </div>
+                    )}
                   {item.max_price && (
                     <div className="flex items-center gap-2">
-                      <span>Max Budget: ${item.max_price}</span>
+                      <span>Max Budget: {formatINR(item.max_price)}</span>
                     </div>
                   )}
                 </div>
@@ -449,7 +521,7 @@ export default function ItemDetail() {
                               )}
                             </div>
                             <div className="text-right">
-                              <div className="text-lg font-bold">${request.proposed_price}</div>
+                              <div className="text-lg font-bold">{formatINR(request.proposed_price)}</div>
                               <Badge className={getStatusBadgeColor(request.status)}>
                                 {request.status.replace('_', ' ')}
                               </Badge>
@@ -652,7 +724,7 @@ export default function ItemDetail() {
                   ) : (
                     <form onSubmit={handleSubmitProposal} className="space-y-4">
                       <div>
-                        <Label htmlFor="price">Your Price ($)*</Label>
+                        <Label htmlFor="price">Your Price (₹)*</Label>
                         <Input
                           id="price"
                           type="number"
