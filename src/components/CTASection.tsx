@@ -61,7 +61,7 @@ const CTASection = () => {
           {/* Additional Info */}
           <div className="pt-8 border-t border-white/20">
             <p className="text-white/70 text-sm">
-              Available on iOS and Android • Free to join • Trusted by 800+ students
+              Made by Akshat | Powered by Sustainable Tech | © 2024 CampusFixers
             </p>
           </div>
         </div>

@@ -10,30 +10,33 @@ export const AuthButton = () => {
   const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchDisplayName();
-    } else {
+    if (!user) {
       setDisplayName(null);
+      return;
     }
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('display_name')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) throw error;
+        if (mounted) setDisplayName(data?.display_name);
+      } catch (error) {
+        console.error('Error fetching display name:', error);
+        if (mounted) setDisplayName(null);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [user]);
-
-  const fetchDisplayName = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) throw error;
-      setDisplayName(data?.display_name);
-    } catch (error) {
-      console.error('Error fetching display name:', error);
-      setDisplayName(null);
-    }
-  };
 
   if (loading) {
     return <Button variant="outline" disabled>Loading...</Button>;

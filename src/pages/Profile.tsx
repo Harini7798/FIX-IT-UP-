@@ -62,45 +62,75 @@ export default function Profile() {
   const [loadingReviews, setLoadingReviews] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      fetchProfile();
-      fetchActivities();
-      fetchReviewsReceived();
-    }
+    if (!user) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        // Profile
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user?.id)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+        } else if (mounted) {
+          const { data: rolesData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user?.id);
+
+          setProfile({
+            ...profileData,
+            user_roles: rolesData || []
+          });
+
+          setFormData({
+            display_name: profileData.display_name || '',
+            bio: profileData.bio || '',
+            skills: profileData.skills?.join(', ') || ''
+          });
+        }
+
+        // Activities
+        setLoadingActivities(true);
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from('activities')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (activitiesError) console.error('Error fetching activities:', activitiesError);
+        if (mounted) setActivities(activitiesData || []);
+        setLoadingActivities(false);
+
+        // Reviews received
+        setLoadingReviews(true);
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select('*, profiles!reviews_reviewer_id_fkey(display_name)')
+          .eq('reviewed_id', user?.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (reviewsError) console.error('Error fetching reviews:', reviewsError);
+        if (mounted) setReviewsReceived(reviewsData || []);
+        setLoadingReviews(false);
+      } catch (err) {
+        console.error('Error loading profile data:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [user]);
-
-  const fetchProfile = async () => {
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      // Fetch user roles separately
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user?.id);
-
-      setProfile({
-        ...profileData,
-        user_roles: rolesData || []
-      });
-
-      setFormData({
-        display_name: profileData.display_name || '',
-        bio: profileData.bio || '',
-        skills: profileData.skills?.join(', ') || ''
-      });
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSave = async () => {
     if (!user || !profile) return;
@@ -129,10 +159,11 @@ export default function Profile() {
       });
 
       fetchProfile(); // Refresh profile data
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error updating profile",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -349,7 +380,7 @@ export default function Profile() {
                   {profile?.bio && (
                     <div>
                       <Label className="text-sm font-medium">Bio</Label>
-                      <p className="text-sm text-muted-foreground">{profile.bio}</p>
+                      <p className="text-lg text-muted-foreground">{profile.bio}</p>
                     </div>
                   )}
                 </CardContent>

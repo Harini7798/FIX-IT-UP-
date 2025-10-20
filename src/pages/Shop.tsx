@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Search, Star, Check, MessageSquare } from 'lucide-react';
+import formatINR from '@/lib/formatCurrency';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -51,44 +52,48 @@ export default function Shop() {
   const [sortBy, setSortBy] = useState('newest');
 
   useEffect(() => {
-    fetchShopItems();
-  }, []);
+    let mounted = true;
 
-  const fetchShopItems = async () => {
-    try {
-      let query = supabase
-        .from('items')
-        .select(`
-          *,
-          profiles (
-            user_id,
-            display_name,
-            rating
-          )
-        `)
-        .eq('is_for_sale', true)
-        .eq('status', 'completed')
-        .not('sale_price', 'is', null);
+    (async () => {
+      try {
+        let query = supabase
+          .from('items')
+          .select(`
+            *,
+            profiles (
+              user_id,
+              display_name,
+              rating
+            )
+          `)
+          .eq('is_for_sale', true)
+          .eq('status', 'completed')
+          .not('sale_price', 'is', null);
 
-      // Apply sorting
-      if (sortBy === 'price_low') {
-        query = query.order('sale_price', { ascending: true });
-      } else if (sortBy === 'price_high') {
-        query = query.order('sale_price', { ascending: false });
-      } else {
-        query = query.order('created_at', { ascending: false });
+        // Apply sorting
+        if (sortBy === 'price_low') {
+          query = query.order('sale_price', { ascending: true });
+        } else if (sortBy === 'price_high') {
+          query = query.order('sale_price', { ascending: false });
+        } else {
+          query = query.order('created_at', { ascending: false });
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+        if (mounted) setItems(data || []);
+      } catch (error) {
+        console.error('Error fetching shop items:', error);
+      } finally {
+        if (mounted) setLoading(false);
       }
+    })();
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setItems(data || []);
-    } catch (error) {
-      console.error('Error fetching shop items:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      mounted = false;
+    };
+  }, [sortBy]);
 
   const filteredItems = items.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -252,8 +257,8 @@ function ShopItemCard({ item }: { item: ShopItem }) {
         </p>
         
         <div className="flex items-center justify-between mb-4">
-          <div className="text-2xl font-bold text-primary">
-            ${item.sale_price}
+            <div className="text-2xl font-bold text-primary">
+            {formatINR(item.sale_price)}
           </div>
           {item.profiles?.rating && (
             <div className="flex items-center gap-1 text-sm">
@@ -286,7 +291,7 @@ function ShopItemCard({ item }: { item: ShopItem }) {
                     Item: <span className="font-medium text-foreground">{item.title}</span>
                   </p>
                   <p className="text-sm text-muted-foreground mb-2">
-                    Price: <span className="font-medium text-foreground">${item.sale_price}</span>
+                    Price: <span className="font-medium text-foreground">{formatINR(item.sale_price)}</span>
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Seller: <span className="font-medium text-foreground">{item.profiles?.display_name || 'Anonymous'}</span>

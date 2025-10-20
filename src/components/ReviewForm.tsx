@@ -47,10 +47,11 @@ export function ReviewForm({ repairRequestId, reviewedId, onReviewSubmitted }: R
       });
 
       onReviewSubmitted();
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error submitting review",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -72,6 +73,7 @@ export function ReviewForm({ repairRequestId, reviewedId, onReviewSubmitted }: R
                 <button
                   key={star}
                   type="button"
+                  aria-label={`${star} star${star > 1 ? 's' : ''}`}
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
                   onClick={() => setRating(star)}

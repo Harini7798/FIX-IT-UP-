@@ -7,11 +7,12 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
+/* eslint-disable react-refresh/only-export-components */
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -40,7 +41,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
+  const signUp = async (email: string, password: string, displayName?: string): Promise<{ error: Error | null }> => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -53,41 +54,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     if (error) {
+      const message = (error as Error).message ?? String(error);
       toast({
         title: "Sign Up Error",
-        description: error.message,
+        description: message,
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Check your email",
-        description: "We've sent you a confirmation link to complete your registration."
-      });
+      return { error: new Error(message) };
     }
 
-    return { error };
+    toast({
+      title: "Check your email",
+      description: "We've sent you a confirmation link to complete your registration."
+    });
+
+    return { error: null };
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
+      const message = (error as Error).message ?? String(error);
       toast({
         title: "Sign In Error", 
-        description: error.message,
+        description: message,
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Welcome back!",
-        description: "Successfully signed in."
-      });
+      return { error: new Error(message) };
     }
 
-    return { error };
+    toast({
+      title: "Welcome back!",
+      description: "Successfully signed in."
+    });
+
+    return { error: null };
   };
 
   const signOut = async () => {

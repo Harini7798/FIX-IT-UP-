@@ -25,52 +25,58 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchDashboardStats();
-    }
+    if (!user) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        // Fetch user's items
+        const { data: items } = await supabase
+          .from('items')
+          .select('*')
+          .eq('user_id', user?.id);
+
+        // Fetch repair requests for user's items
+        const { data: requests } = await supabase
+          .from('repair_requests')
+          .select('*, items!inner(*)')
+          .eq('items.user_id', user?.id)
+          .in('status', ['open', 'assigned', 'in_progress']);
+
+        // Fetch completed repairs
+        const { data: completed } = await supabase
+          .from('repair_requests')
+          .select('*, items!inner(*)')
+          .eq('items.user_id', user?.id)
+          .eq('status', 'completed');
+
+        // Get user's profile for rating
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('rating, total_reviews')
+          .eq('user_id', user?.id)
+          .single();
+
+        if (!mounted) return;
+
+        setStats({
+          myItems: items?.length || 0,
+          activeRequests: requests?.length || 0,
+          completedRepairs: completed?.length || 0,
+          averageRating: profile?.rating || 0
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [user]);
-
-  const fetchDashboardStats = async () => {
-    try {
-      // Fetch user's items
-      const { data: items } = await supabase
-        .from('items')
-        .select('*')
-        .eq('user_id', user?.id);
-
-      // Fetch repair requests for user's items
-      const { data: requests } = await supabase
-        .from('repair_requests')
-        .select('*, items!inner(*)')
-        .eq('items.user_id', user?.id)
-        .in('status', ['open', 'assigned', 'in_progress']);
-
-      // Fetch completed repairs
-      const { data: completed } = await supabase
-        .from('repair_requests')
-        .select('*, items!inner(*)')
-        .eq('items.user_id', user?.id)
-        .eq('status', 'completed');
-
-      // Get user's profile for rating
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('rating, total_reviews')
-        .eq('user_id', user?.id)
-        .single();
-
-      setStats({
-        myItems: items?.length || 0,
-        activeRequests: requests?.length || 0,
-        completedRepairs: completed?.length || 0,
-        averageRating: profile?.rating || 0
-      });
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!user) {
     return (

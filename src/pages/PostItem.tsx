@@ -111,7 +111,7 @@ export default function PostItem() {
           user_id: user.id,
           title: formData.title,
           description: formData.description,
-          category: formData.category as any,
+          category: formData.category,
           location: formData.location,
           estimated_price: formData.estimatedPrice ? parseFloat(formData.estimatedPrice) : null,
           max_price: formData.maxPrice ? parseFloat(formData.maxPrice) : null,
@@ -127,10 +127,11 @@ export default function PostItem() {
       });
 
       navigate('/dashboard');
-    } catch (error: any) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       toast({
         title: "Error posting item",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -248,7 +249,7 @@ export default function PostItem() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="estimatedPrice">Estimated Repair Cost ($)</Label>
+                  <Label htmlFor="estimatedPrice">Estimated Repair Cost (₹)</Label>
                   <Input
                     id="estimatedPrice"
                     type="number"
@@ -260,7 +261,7 @@ export default function PostItem() {
                 </div>
 
                 <div>
-                  <Label htmlFor="maxPrice">Maximum Budget ($)</Label>
+                  <Label htmlFor="maxPrice">Maximum Budget (₹)</Label>
                   <Input
                     id="maxPrice"
                     type="number"
@@ -303,6 +304,7 @@ export default function PostItem() {
                           />
                           <button
                             type="button"
+                            aria-label={`Remove image ${index + 1}`}
                             onClick={() => removeImage(index)}
                             className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90"
                           >

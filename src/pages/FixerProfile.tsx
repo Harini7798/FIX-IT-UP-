@@ -46,77 +46,79 @@ export default function FixerProfile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (userId) {
-      fetchProfile();
-      fetchReviews();
-      fetchCompletedRepairs();
-    }
+    if (!userId) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        // Profile
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+        } else if (mounted) {
+          // Fetch user roles separately
+          const { data: rolesData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', userId);
+
+          setProfile({
+            ...profileData,
+            user_roles: rolesData || []
+          });
+        }
+
+        // Reviews
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select(`
+            *,
+            reviewer_profile:profiles!reviews_reviewer_id_fkey(display_name)
+          `)
+          .eq('reviewed_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (reviewsError) {
+          console.error('Error fetching reviews:', reviewsError);
+        } else if (mounted) {
+          setReviews(reviewsData || []);
+        }
+
+        // Completed repairs
+        const { data: repairsData, error: repairsError } = await supabase
+          .from('repair_requests')
+          .select(`
+            id,
+            created_at,
+            item:items(title, category)
+          `)
+          .eq('fixer_id', userId)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (repairsError) {
+          console.error('Error fetching repairs:', repairsError);
+        } else if (mounted) {
+          setCompletedRepairs(repairsData || []);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Error loading fixer profile data:', err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
   }, [userId]);
-
-  const fetchProfile = async () => {
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (profileError) {
-      console.error('Error fetching profile:', profileError);
-      return;
-    }
-
-    // Fetch user roles separately
-    const { data: rolesData } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-
-    setProfile({
-      ...profileData,
-      user_roles: rolesData || []
-    });
-  };
-
-  const fetchReviews = async () => {
-    const { data, error } = await supabase
-      .from('reviews')
-      .select(`
-        *,
-        reviewer_profile:profiles!reviews_reviewer_id_fkey(display_name)
-      `)
-      .eq('reviewed_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (error) {
-      console.error('Error fetching reviews:', error);
-      return;
-    }
-
-    setReviews(data || []);
-  };
-
-  const fetchCompletedRepairs = async () => {
-    const { data, error } = await supabase
-      .from('repair_requests')
-      .select(`
-        id,
-        created_at,
-        item:items(title, category)
-      `)
-      .eq('fixer_id', userId)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (error) {
-      console.error('Error fetching repairs:', error);
-      return;
-    }
-
-    setCompletedRepairs(data || []);
-    setLoading(false);
-  };
 
   if (loading) {
     return (
