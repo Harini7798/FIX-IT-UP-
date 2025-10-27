@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Navigation } from '@/components/Navigation';
@@ -61,76 +61,64 @@ export default function Profile() {
   const [reviewsReceived, setReviewsReceived] = useState<Review[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
 
-  useEffect(() => {
+  const mountedRef = useRef(false);
+
+  // Reusable profile loader so Save/Cancel can refresh the page data
+  const fetchProfile = useCallback(async () => {
     if (!user) return;
 
-    let mounted = true;
+    if (mountedRef.current) setLoading(true);
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
 
-    (async () => {
-      try {
-        // Profile
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', user?.id)
-          .single();
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+      } else {
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id);
 
-        if (profileError) {
-          console.error('Error fetching profile:', profileError);
-        } else if (mounted) {
-          const { data: rolesData } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user?.id);
-
+        if (mountedRef.current) {
           setProfile({
             ...profileData,
             user_roles: rolesData || []
           });
 
           setFormData({
-            display_name: profileData.display_name || '',
-            bio: profileData.bio || '',
-            skills: profileData.skills?.join(', ') || ''
+            display_name: profileData?.display_name || '',
+            bio: profileData?.bio || '',
+            skills: profileData?.skills?.join(', ') || ''
           });
         }
-
-        // Activities
-        setLoadingActivities(true);
-        const { data: activitiesData, error: activitiesError } = await supabase
-          .from('activities')
-          .select('*')
-          .eq('user_id', user?.id)
-          .order('created_at', { ascending: false })
-          .limit(20);
-
-        if (activitiesError) console.error('Error fetching activities:', activitiesError);
-        if (mounted) setActivities(activitiesData || []);
-        setLoadingActivities(false);
-
-        // Reviews received
-        setLoadingReviews(true);
-        const { data: reviewsData, error: reviewsError } = await supabase
-          .from('reviews')
-          .select('*, profiles!reviews_reviewer_id_fkey(display_name)')
-          .eq('reviewed_id', user?.id)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (reviewsError) console.error('Error fetching reviews:', reviewsError);
-        if (mounted) setReviewsReceived(reviewsData || []);
-        setLoadingReviews(false);
-      } catch (err) {
-        console.error('Error loading profile data:', err);
-      } finally {
-        if (mounted) setLoading(false);
       }
-    })();
+
+      // Load related lists (activities, reviews)
+      await fetchActivities();
+      await fetchReviewsReceived();
+    } catch (err) {
+      console.error('Error loading profile data:', err);
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Use a ref to track mounted state so helper fetchers can avoid setting state after unmount
+    // (we keep the fetch helpers at top-level so they can be reused by Save/Cancel)
+    mountedRef.current = true;
+    fetchProfile();
 
     return () => {
-      mounted = false;
+      mountedRef.current = false;
     };
-  }, [user]);
+  }, [fetchProfile, user]);
 
   const handleSave = async () => {
     if (!user || !profile) return;
@@ -171,9 +159,9 @@ export default function Profile() {
     }
   };
 
-  const fetchReviewsReceived = async () => {
+  const fetchReviewsReceived = useCallback(async () => {
     if (!user) return;
-    
+
     setLoadingReviews(true);
     try {
       const { data, error } = await supabase
@@ -190,17 +178,18 @@ export default function Profile() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setReviewsReceived(data || []);
+      if (mountedRef.current) setReviewsReceived(data || []);
     } catch (error) {
       console.error('Error fetching reviews:', error);
+      if (mountedRef.current) setReviewsReceived([]);
     } finally {
       setLoadingReviews(false);
     }
-  };
+  }, [user]);
 
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     if (!user) return;
-    
+
     setLoadingActivities(true);
     try {
       const activities: ActivityItem[] = [];
@@ -278,13 +267,20 @@ export default function Profile() {
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
-      setActivities(activities.slice(0, 10));
+      if (mountedRef.current) setActivities(activities.slice(0, 10));
     } catch (error) {
-      console.error('Error fetching activities:', error);
+      // Handle missing table (PGRST205) gracefully in dev/staging
+      if (error?.code === 'PGRST205') {
+        console.warn('Activities table not found; showing empty activity list.');
+        if (mountedRef.current) setActivities([]);
+      } else {
+        console.error('Error fetching activities:', error);
+        if (mountedRef.current) setActivities([]);
+      }
     } finally {
       setLoadingActivities(false);
     }
-  };
+  }, [user]);
 
   if (!user) {
     return (
